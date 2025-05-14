@@ -1,3 +1,6 @@
+import org.typelevel.sbt.gha.WorkflowStep.Run
+import org.typelevel.sbt.gha.WorkflowStep.Sbt
+
 /*
  * Copyright 2021 http4s.org
  *
@@ -24,14 +27,42 @@ import JSEnv._
 
 name := "http4s-crypto"
 
-ThisBuild / tlBaseVersion := "0.2"
+ThisBuild / githubOwner := "igor-ramazanov-typelevel"
+ThisBuild / githubRepository := "http4s-crypto"
+
+ThisBuild / githubWorkflowPublishPreamble := List.empty
+ThisBuild / githubWorkflowUseSbtThinClient := true
+ThisBuild / githubWorkflowPublish := List(
+  Run(
+    commands = List("echo \"$PGP_SECRET\" | gpg --import"),
+    id = None,
+    name = Some("Import PGP key"),
+    env = Map("PGP_SECRET" -> "${{ secrets.PGP_SECRET }}"),
+    params = Map(),
+    timeoutMinutes = None,
+    workingDirectory = None
+  ),
+  Sbt(
+    commands = List("+ publish"),
+    id = None,
+    name = Some("Publish"),
+    cond = None,
+    env = Map("GITHUB_TOKEN" -> "${{ secrets.GB_TOKEN }}"),
+    params = Map.empty,
+    timeoutMinutes = None,
+    preamble = true
+  )
+)
+ThisBuild / gpgWarnOnFailure := false
+
+ThisBuild / tlBaseVersion := "0.3"
 
 ThisBuild / developers := List(
   tlGitHubDev("armanbilge", "Arman Bilge")
 )
 ThisBuild / startYear := Some(2021)
 
-ThisBuild / crossScalaVersions := Seq("3.3.1", "2.12.18", "2.13.11")
+ThisBuild / crossScalaVersions := Seq("3.3.5", "2.13.16")
 
 ThisBuild / githubWorkflowBuildPreamble ++= Seq(
   WorkflowStep.Use(
@@ -47,7 +78,7 @@ ThisBuild / githubWorkflowBuildMatrixAdditions += "jsenv" -> jsenvs
 ThisBuild / githubWorkflowBuildSbtStepPreamble += s"set Global / useJSEnv := JSEnv.$${{ matrix.jsenv }}"
 ThisBuild / githubWorkflowBuildMatrixExclusions ++= {
   for {
-    scala <- List("2.12", "3")
+    scala <- List("3")
     jsenv <- jsenvs.tail
   } yield MatrixExclude(Map("scala" -> scala, "jsenv" -> jsenv))
 }
@@ -78,12 +109,12 @@ ThisBuild / Test / jsEnv := {
   }
 }
 
-val catsVersion = "2.10.0"
-val catsEffectVersion = "3.5.2"
-val scodecBitsVersion = "1.1.38"
-val munitVersion = "1.0.0-M10"
-val munitCEVersion = "2.0.0-M3"
-val disciplineMUnitVersion = "2.0.0-M3"
+val catsVersion = "2.13.0"
+val catsEffectVersion = "3.7-4972921"
+val scodecBitsVersion = "1.2.1"
+val munitVersion = "1.1.1"
+val munitCEVersion = "2.2.0-M1"
+val disciplineMUnitVersion = "2.0.0"
 
 lazy val root = tlCrossRootProject.aggregate(crypto, testRuntime)
 
@@ -100,10 +131,13 @@ lazy val crypto = crossProject(JSPlatform, JVMPlatform, NativePlatform)
       "org.typelevel" %%% "cats-effect" % catsEffectVersion % Test,
       "org.typelevel" %%% "discipline-munit" % disciplineMUnitVersion % Test,
       "org.typelevel" %%% "munit-cats-effect" % munitCEVersion % Test
-    )
+    ),
+    publishTo := githubPublishTo.value,
+    publishConfiguration := publishConfiguration.value.withOverwrite(true),
+    publishLocalConfiguration := publishLocalConfiguration.value.withOverwrite(true)
   )
   .nativeSettings(
-    tlVersionIntroduced := List("2.12", "2.13", "3").map(_ -> "0.2.4").toMap,
+    tlVersionIntroduced := List("2.13", "3").map(_ -> "0.2.4").toMap,
     unusedCompileDependenciesTest := {}
   )
   .dependsOn(testRuntime % Test)
